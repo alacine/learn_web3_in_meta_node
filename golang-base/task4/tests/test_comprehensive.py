@@ -3,12 +3,12 @@
 模拟完整的博客系统工作流程，包括用户互动场景
 """
 
-from .base_test import BaseAPITest
+from .auth_helper import AuthenticatedAPITest
 import json
 import time
 
 
-class ComprehensiveAPITest(BaseAPITest):
+class ComprehensiveAPITest(AuthenticatedAPITest):
     """综合API测试类"""
 
     def __init__(self, base_url: str = "http://localhost:8000/api/v1", auto_cleanup: bool = True):
@@ -16,6 +16,17 @@ class ComprehensiveAPITest(BaseAPITest):
         self.test_users = []  # 存储测试用户信息
         self.test_posts = []  # 存储测试文章信息
         self.test_comments = []  # 存储测试评论信息
+
+    def switch_user(self, username: str):
+        """切换到指定用户的JWT token"""
+        user = next((u for u in self.test_users if u["username"] == username), None)
+        if user and "token" in user:
+            self.set_jwt_token(user["token"])
+            self.print_info(f"切换到用户: {username}")
+            return True
+        else:
+            self.print_error(f"无法切换到用户 {username} (用户不存在或无token)")
+            return False
 
     def create_test_users(self):
         """创建测试用户"""
@@ -55,6 +66,7 @@ class ComprehensiveAPITest(BaseAPITest):
                 },
                 expected_status=200,
                 description=f"注册用户 {user_data['username']}",
+                require_auth=False,
             )
 
             if response.status_code == 200:
@@ -88,7 +100,21 @@ class ComprehensiveAPITest(BaseAPITest):
                 data={"id": user["id"], "password": user["password"]},
                 expected_status=200,
                 description=f"用户 {user['username']} 正确登录",
+                require_auth=False,
             )
+
+            # 提取JWT token
+            if login_response.status_code == 200:
+                try:
+                    data = login_response.json()
+                    token = data.get("data", {}).get("token")
+                    if token:
+                        user["token"] = token
+                        self.print_success(f"用户 {user['username']} 获取到JWT token")
+                    else:
+                        self.print_error(f"用户 {user['username']} 登录响应中未找到token")
+                except:
+                    self.print_error(f"用户 {user['username']} 无法解析登录响应")
 
             # 错误密码登录
             wrong_response = self.make_request(
@@ -97,6 +123,7 @@ class ComprehensiveAPITest(BaseAPITest):
                 data={"id": user["id"], "password": "wrongpassword"},
                 expected_status=401,
                 description=f"用户 {user['username']} 错误密码登录",
+                require_auth=False,
             )
 
     def create_blog_posts(self):
@@ -278,6 +305,11 @@ EXPLAIN SELECT * FROM users WHERE email = 'test@example.com';
             },
         ]
 
+        # 切换到Alice用户进行文章创建
+        if not self.switch_user("alice"):
+            self.print_error("无法切换到Alice用户")
+            return False
+
         for i, post_data in enumerate(posts_data, 1):
             print(f"\\n  📝 创建文章 {i}: {post_data['title']}")
 
@@ -337,7 +369,12 @@ EXPLAIN SELECT * FROM users WHERE email = 'test@example.com';
             "数据库优化很重要，感谢分享经验。",
         ]
 
+        # 切换到Bob用户进行评论
         print("\\n  💬 Bob 发表详细评论")
+        if not self.switch_user("bob"):
+            self.print_error("无法切换到Bob用户")
+            return False
+
         for i, post in enumerate(self.test_posts):
             comment_content = (
                 bob_comments[i] if i < len(bob_comments) else "很有用的文章，学习了！"
@@ -367,7 +404,12 @@ EXPLAIN SELECT * FROM users WHERE email = 'test@example.com';
                         }
                     )
 
+        # 切换到Charlie用户进行评论
         print("\\n  💬 Charlie 发表简短评论")
+        if not self.switch_user("charlie"):
+            self.print_error("无法切换到Charlie用户")
+            return False
+
         for i, post in enumerate(self.test_posts[:2]):  # Charlie 只评论前两篇
             comment_content = (
                 charlie_comments[i] if i < len(charlie_comments) else "不错！"
@@ -622,48 +664,60 @@ Go语言在微服务架构中表现出色：
         """清理测试数据"""
         self.print_step(9, "清理测试数据")
 
-        # 清理评论
+        # 清理评论 - 需要切换到评论作者的身份
         print("\\n  🗑️ 清理评论数据")
         for comment in self.test_comments[:]:
             try:
-                response = self.make_request(
-                    "DELETE",
-                    f"/comment/{comment['id']}",
-                    expected_status=200,
-                    description=f"删除评论 ID: {comment['id']}",
-                )
-                if response.status_code == 200:
-                    self.test_comments.remove(comment)
+                # 切换到评论作者的token
+                author_username = comment["author"]["username"]
+                if self.switch_user(author_username):
+                    response = self.make_request(
+                        "DELETE",
+                        f"/comment/{comment['id']}",
+                        expected_status=200,
+                        description=f"删除评论 ID: {comment['id']}",
+                    )
+                    if response.status_code == 200:
+                        self.test_comments.remove(comment)
+                else:
+                    self.print_error(f"无法切换到用户 {author_username} 删除评论")
             except Exception as e:
                 self.print_error(f"清理评论失败: {str(e)}")
 
-        # 清理文章
+        # 清理文章 - 切换到Alice（文章作者）
         print("\\n  🗑️ 清理文章数据")
-        for post in self.test_posts[:]:
-            try:
-                response = self.make_request(
-                    "DELETE",
-                    f"/post/{post['id']}",
-                    expected_status=200,
-                    description=f"删除文章: {post['title'][:30]}...",
-                )
-                if response.status_code == 200:
-                    self.test_posts.remove(post)
-            except Exception as e:
-                self.print_error(f"清理文章失败: {str(e)}")
+        if self.switch_user("alice"):
+            for post in self.test_posts[:]:
+                try:
+                    response = self.make_request(
+                        "DELETE",
+                        f"/post/{post['id']}",
+                        expected_status=200,
+                        description=f"删除文章: {post['title'][:30]}...",
+                    )
+                    if response.status_code == 200:
+                        self.test_posts.remove(post)
+                except Exception as e:
+                    self.print_error(f"清理文章失败: {str(e)}")
+        else:
+            self.print_error("无法切换到Alice用户删除文章")
 
-        # 清理用户
+        # 清理用户 - 每个用户删除自己
         print("\\n  🗑️ 清理用户数据")
         for user in self.test_users[:]:
             try:
-                response = self.make_request(
-                    "DELETE",
-                    f"/user/{user['id']}",
-                    expected_status=200,
-                    description=f"删除用户: {user['username']}",
-                )
-                if response.status_code == 200:
-                    self.test_users.remove(user)
+                # 切换到要删除的用户自己的token
+                if self.switch_user(user["username"]):
+                    response = self.make_request(
+                        "DELETE",
+                        f"/user/{user['id']}",
+                        expected_status=200,
+                        description=f"删除用户: {user['username']}",
+                    )
+                    if response.status_code == 200:
+                        self.test_users.remove(user)
+                else:
+                    self.print_error(f"无法切换到用户 {user['username']} 进行删除")
             except Exception as e:
                 self.print_error(f"清理用户失败: {str(e)}")
     

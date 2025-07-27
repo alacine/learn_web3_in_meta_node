@@ -6,10 +6,20 @@ import (
 	"task4/service"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type CommentAPI struct{}
+
+type CreateCommentRequest struct {
+	Content string `json:"content" binding:"required"`
+	UserID  uint   `json:"user_id" binding:"required"`
+	PostID  uint   `json:"post_id" binding:"required"`
+}
+
+type UpdateCommentRequest struct {
+	ID      uint   `json:"id" binding:"required"`
+	Content string `json:"content"`
+}
 
 func (u *CommentAPI) Get(ctx *gin.Context) {
 	id, _ := ctx.Get("id")
@@ -28,11 +38,18 @@ func (u *CommentAPI) Get(ctx *gin.Context) {
 }
 
 func (u *CommentAPI) Create(ctx *gin.Context) {
-	var comment model.Comment
-	err := ctx.ShouldBindJSON(&comment)
+	var req CreateCommentRequest
+	err := ctx.ShouldBindJSON(&req)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, RespBase{CodeFailed, err.Error()})
 		return
+	}
+
+	// 转换为Comment模型
+	comment := model.Comment{
+		Content: req.Content,
+		UserID:  req.UserID,
+		PostID:  req.PostID,
 	}
 
 	us := service.NewCommentService(service.GetDB())
@@ -56,7 +73,7 @@ func (u *CommentAPI) Delete(ctx *gin.Context) {
 	id, _ := ctx.Get("id")
 	us := service.NewCommentService(service.GetDB())
 	comment := model.Comment{
-		Model: gorm.Model{
+		CommonModel: model.CommonModel{
 			ID: id.(uint),
 		},
 	}
@@ -75,12 +92,19 @@ func (u *CommentAPI) Delete(ctx *gin.Context) {
 
 func (u *CommentAPI) Update(ctx *gin.Context) {
 	us := service.NewCommentService(service.GetDB())
-	var comment model.Comment
-	err := ctx.ShouldBindJSON(&comment)
+	var req UpdateCommentRequest
+	err := ctx.ShouldBindJSON(&req)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, RespBase{CodeFailed, err.Error()})
+		ctx.JSON(http.StatusBadRequest, RespBase{CodeFailed, err.Error()})
 		return
 	}
+
+	// 转换为Comment模型
+	comment := model.Comment{
+		CommonModel: model.CommonModel{ID: req.ID},
+		Content:     req.Content,
+	}
+
 	comment, err = us.Update(comment)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, RespBase{CodeFailed, err.Error()})

@@ -31,6 +31,7 @@ class UserAPITest(BaseAPITest):
             data=user_data,
             expected_status=200,
             description="正常用户注册",
+            require_auth=False,
         )
 
         if response.status_code == 200:
@@ -57,6 +58,7 @@ class UserAPITest(BaseAPITest):
             data=user_data,
             expected_status=400,  # 期望失败
             description="重复用户注册",
+            require_auth=False,
         )
 
         return response
@@ -84,6 +86,7 @@ class UserAPITest(BaseAPITest):
                 data=user_data,
                 expected_status=200,
                 description=f"注册用户 {user_data['username']}",
+                require_auth=False,
             )
 
             if response.status_code == 200:
@@ -154,7 +157,21 @@ class UserAPITest(BaseAPITest):
             data=login_data,
             expected_status=200,
             description="用户登录",
+            require_auth=False,
         )
+
+        # 提取JWT token并设置到session中
+        if response.status_code == 200:
+            try:
+                data = response.json()
+                token = data.get("data", {}).get("token")
+                if token:
+                    self.set_jwt_token(token)
+                    self.print_success("JWT token已设置，后续请求将使用此token进行认证")
+                else:
+                    self.print_warning("登录响应中未找到token")
+            except:
+                self.print_error("无法解析登录响应中的token")
 
         return response
 
@@ -175,6 +192,7 @@ class UserAPITest(BaseAPITest):
             data=login_data,
             expected_status=401,
             description="错误密码登录",
+            require_auth=False,
         )
 
         return response
@@ -273,6 +291,7 @@ class UserAPITest(BaseAPITest):
             data=temp_user,
             expected_status=200,
             description="创建临时用户用于删除测试",
+            require_auth=False,
         )
 
         if create_response.status_code == 200:
@@ -349,6 +368,7 @@ class UserAPITest(BaseAPITest):
                 data=case["data"],
                 expected_status=case["expected_status"],
                 description=case["name"],
+                require_auth=False,
             )
 
     def cleanup(self):
@@ -403,10 +423,14 @@ class UserAPITest(BaseAPITest):
             self.test_user_registration()
             self.test_duplicate_registration()
             self.test_multiple_user_registration()
+            
+            # 登录获取JWT token后再进行需要认证的测试
+            self.test_user_login()
+            
+            # 现在可以进行需要认证的测试
             self.test_get_user()
             self.test_get_nonexistent_user()
             self.test_invalid_user_id()
-            self.test_user_login()
             self.test_wrong_password_login()
             self.test_update_user()
             self.test_verify_update()

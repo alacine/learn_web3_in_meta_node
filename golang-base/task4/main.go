@@ -26,24 +26,35 @@ func main() {
 	{
 		apiUser := new(api.UserAPI)
 		g.POST("/register", apiUser.Create)
-		g.GET("/user/:id", middleware.ValidateUriID(), apiUser.Get)
-		g.DELETE("/user/:id", middleware.ValidateUriID(), apiUser.Delete)
-		g.PUT("/user", apiUser.Update)
 		g.POST("/login", apiUser.Login)
+
+		// Protected user routes
+		protected := g.Group("/", middleware.JWTAuth())
+		{
+			protected.GET("/user/:id", middleware.ValidateUriID(), apiUser.Get)
+			protected.DELETE("/user/:id", middleware.ValidateUriID(), apiUser.Delete)
+			protected.PUT("/user", apiUser.Update)
+		}
 	}
 	{
 		apiPost := new(api.PostAPI)
-		g.POST("/post", apiPost.Create)
-		g.DELETE("/post/:id", middleware.ValidateUriID(), apiPost.Delete)
-		g.PUT("/post", apiPost.Update)
-		g.GET("/post/:id", middleware.ValidateUriID(), apiPost.Get)
+		protected := g.Group("/", middleware.JWTAuth())
+		{
+			protected.POST("/post", apiPost.Create)
+			protected.DELETE("/post/:id", middleware.ValidateUriID(), apiPost.Delete)
+			protected.PUT("/post", apiPost.Update)
+			protected.GET("/post/:id", middleware.ValidateUriID(), apiPost.Get)
+		}
 	}
 	{
 		apiComment := new(api.CommentAPI)
-		g.POST("/comment", apiComment.Create)
-		g.DELETE("/comment/:id", middleware.ValidateUriID(), apiComment.Delete)
-		g.PUT("/comment", apiComment.Update)
-		g.GET("/comment/:id", middleware.ValidateUriID(), apiComment.Get)
+		protected := g.Group("/", middleware.JWTAuth())
+		{
+			protected.POST("/comment", apiComment.Create)
+			protected.DELETE("/comment/:id", middleware.ValidateUriID(), apiComment.Delete)
+			protected.PUT("/comment", apiComment.Update)
+			protected.GET("/comment/:id", middleware.ValidateUriID(), apiComment.Get)
+		}
 	}
 
 	err = r.Run(":8000")

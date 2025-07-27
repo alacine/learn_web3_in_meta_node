@@ -33,33 +33,39 @@ go run main.go
 #### 方式一：交互式菜单
 
 ```bash
-python run_tests.py
+uv run python run_tests.py
 ```
 
 #### 方式二：命令行参数
 
 ```bash
 # 运行所有测试
-python run_tests.py --all
+uv run run_tests.py --all
 
 # 运行特定测试模块
-python run_tests.py --user          # 用户API测试
-python run_tests.py --post          # 文章API测试
-python run_tests.py --comment       # 评论API测试
-python run_tests.py --comprehensive # 综合测试
+uv run run_tests.py --user          # 用户API测试
+uv run run_tests.py --post          # 文章API测试
+uv run run_tests.py --comment       # 评论API测试
+uv run run_tests.py --comprehensive # 综合测试
 
 # 自定义API地址
-python run_tests.py --all --base-url http://localhost:8080/api/v1
+uv run run_tests.py --all --base-url http://localhost:8080/api/v1
 ```
 
 #### 方式三：直接运行测试模块
 
 ```bash
 # 运行单个测试模块
-python -m tests.test_user_api
-python -m tests.test_post_api
-python -m tests.test_comment_api
-python -m tests.test_comprehensive
+uv run python -m tests.test_user_api
+uv run python -m tests.test_post_api
+uv run python -m tests.test_comment_api
+uv run python -m tests.test_comprehensive
+
+# 或者直接执行测试文件
+uv run python tests/test_user_api.py
+uv run python tests/test_post_api.py
+uv run python tests/test_comment_api.py
+uv run python tests/test_comprehensive.py
 ```
 
 ## 📦 项目结构

@@ -47,12 +47,7 @@ func (us UserService) Update(u model.User) (model.User, error) {
 		return model.User{}, errors.New("database connection is not available")
 	}
 
-	// 使用Updates方法只更新非零值字段，避免更新created_at等时间字段
-	result := us.db.Model(&u).Updates(map[string]any{
-		"username": u.Username,
-		"password": u.Password,
-		"email":    u.Email,
-	})
+	result := us.db.Model(&u).Updates(u)
 
 	if result.Error != nil {
 		return model.User{}, result.Error

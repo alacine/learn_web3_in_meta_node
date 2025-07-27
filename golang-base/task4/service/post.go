@@ -47,12 +47,7 @@ func (us PostService) Update(u model.Post) (model.Post, error) {
 		return model.Post{}, errors.New("database connection is not available")
 	}
 
-	// 使用Updates方法只更新非零值字段，避免更新created_at等时间字段
-	result := us.db.Model(&u).Updates(map[string]any{
-		"title":   u.Title,
-		"content": u.Content,
-		"user_id": u.UserID,
-	})
+	result := us.db.Model(&u).Updates(u)
 
 	if result.Error != nil {
 		return model.Post{}, result.Error

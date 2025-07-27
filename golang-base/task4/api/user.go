@@ -5,12 +5,19 @@ import (
 	"net/http"
 	"task4/model"
 	"task4/service"
+	"time"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
+	"github.com/golang-jwt/jwt"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type UserAPI struct{}
+
+type LoginRequest struct {
+	ID       uint   `json:"id" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
 
 func (u *UserAPI) Get(ctx *gin.Context) {
 	id, _ := ctx.Get("id")
@@ -37,6 +44,13 @@ func (u *UserAPI) Create(ctx *gin.Context) {
 		return
 	}
 
+	bp, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, RespBase{CodeFailed, err.Error()})
+		return
+	}
+	user.Password = string(bp)
+
 	us := service.NewUserService(service.GetDB())
 	user, err = us.Create(user)
 	if err != nil {
@@ -58,7 +72,7 @@ func (u *UserAPI) Delete(ctx *gin.Context) {
 	id, _ := ctx.Get("id")
 	us := service.NewUserService(service.GetDB())
 	user := model.User{
-		Model: gorm.Model{
+		CommonModel: model.CommonModel{
 			ID: id.(uint),
 		},
 	}
@@ -83,6 +97,16 @@ func (u *UserAPI) Update(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, RespBase{CodeFailed, err.Error()})
 		return
 	}
+
+	if len(user.Password) > 0 {
+		bp, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, RespBase{CodeFailed, err.Error()})
+			return
+		}
+		user.Password = string(bp)
+	}
+
 	user, err = us.Update(user)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, RespBase{CodeFailed, err.Error()})
@@ -97,29 +121,46 @@ func (u *UserAPI) Update(ctx *gin.Context) {
 
 func (u *UserAPI) Login(ctx *gin.Context) {
 	us := service.NewUserService(service.GetDB())
-	var puser model.User
-	err := ctx.ShouldBindJSON(&puser)
+	var loginReq LoginRequest
+	err := ctx.ShouldBindJSON(&loginReq)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, RespBase{CodeFailed, err.Error()})
+		ctx.JSON(http.StatusBadRequest, RespBase{CodeFailed, err.Error()})
 		return
 	}
 
-	user, err := us.Get(puser.ID)
+	user, err := us.Get(loginReq.ID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, RespBase{CodeFailed, "get user failed"})
 		return
 	}
-	if user.Password != puser.Password {
-		ctx.JSON(http.StatusUnauthorized, RespBase{
-			CodeFailed,
-			"login failed: username or password not correct",
-		})
+
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(loginReq.Password))
+	if err != nil {
+		ctx.JSON(http.StatusUnauthorized, RespBase{CodeFailed, "Invalid username or password"})
 		return
 	}
 
-	ctx.JSON(http.StatusOK, Resp[model.User]{
+	// JWT过期时间配置（24小时）
+	expirationTime := time.Now().Add(24 * time.Hour)
+	
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":       user.ID,
+		"username": user.Username,
+		"iat":      time.Now().Unix(),     // 签发时间
+		"exp":      expirationTime.Unix(), // 过期时间
+	})
+	tokenStr, err := token.SignedString([]byte("mock secrect key"))
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, RespBase{CodeFailed, "generate token failed: " + err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, Resp[gin.H]{
 		Code: CodeSuccess,
 		Msg:  MsgSuccess,
-		Data: user,
+		Data: gin.H{
+			"user":  user,
+			"token": tokenStr,
+		},
 	})
 }

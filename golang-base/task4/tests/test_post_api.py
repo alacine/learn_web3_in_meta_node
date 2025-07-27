@@ -3,11 +3,11 @@
 测试文章创建、获取、更新、删除等功能
 """
 
-from .base_test import BaseAPITest
+from .auth_helper import AuthenticatedAPITest
 import json
 
 
-class PostAPITest(BaseAPITest):
+class PostAPITest(AuthenticatedAPITest):
     """文章API测试类"""
 
     def __init__(self, base_url: str = "http://localhost:8000/api/v1", auto_cleanup: bool = True):
@@ -16,30 +16,11 @@ class PostAPITest(BaseAPITest):
         self.created_post_ids = []  # 记录创建的文章ID用于清理
 
     def setup_test_user(self):
-        """设置测试用户"""
-        self.print_step(0, "创建测试用户")
-
-        user_data = {
-            "username": "postauthor",
-            "password": "password123",
-            "email": "author@example.com",
-        }
-
-        response = self.make_request(
-            "POST",
-            "/register",
-            data=user_data,
-            expected_status=200,
-            description="创建文章作者用户",
-        )
-
-        if response.status_code == 200:
-            user_id = self.extract_id_from_response(response)
-            if user_id:
-                self.created_user_ids.append(user_id)
-                self.print_info(f"创建测试用户ID: {user_id}")
-                return user_id
-
+        """设置测试用户并登录获取JWT"""
+        user_id = self.setup_authenticated_user("postauthor", "password123")
+        if user_id:
+            self.created_user_ids.append(user_id)
+            return user_id
         return None
 
     def test_create_post(self):

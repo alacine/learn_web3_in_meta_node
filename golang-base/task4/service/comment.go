@@ -47,12 +47,7 @@ func (us CommentService) Update(u model.Comment) (model.Comment, error) {
 		return model.Comment{}, errors.New("database connection is not available")
 	}
 
-	// 使用Updates方法只更新非零值字段，避免更新created_at等时间字段
-	result := us.db.Model(&u).Updates(map[string]any{
-		"content": u.Content,
-		"user_id": u.UserID,
-		"post_id": u.PostID,
-	})
+	result := us.db.Model(&u).Updates(u)
 
 	if result.Error != nil {
 		return model.Comment{}, result.Error

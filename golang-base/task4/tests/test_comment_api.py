@@ -3,11 +3,11 @@
 测试评论创建、获取、更新、删除等功能
 """
 
-from .base_test import BaseAPITest
+from .auth_helper import AuthenticatedAPITest
 import json
 
 
-class CommentAPITest(BaseAPITest):
+class CommentAPITest(AuthenticatedAPITest):
     """评论API测试类"""
 
     def __init__(self, base_url: str = "http://localhost:8000/api/v1", auto_cleanup: bool = True):
@@ -17,38 +17,20 @@ class CommentAPITest(BaseAPITest):
         self.created_comment_ids = []  # 记录创建的评论ID用于清理
 
     def setup_test_data(self):
-        """设置测试数据（用户和文章）"""
+        """设置测试数据（用户和文章）并进行JWT认证"""
         self.print_step(0, "准备测试数据")
 
-        # 创建测试用户
-        print("\\n  👤 创建评论者用户")
-        user_data = {
-            "username": "commenter",
-            "password": "password123",
-            "email": "commenter@example.com",
-        }
-
-        user_response = self.make_request(
-            "POST",
-            "/register",
-            data=user_data,
-            expected_status=200,
-            description="创建评论者用户",
-        )
-
-        if user_response.status_code == 200:
-            user_id = self.extract_id_from_response(user_response)
-            if user_id:
-                self.created_user_ids.append(user_id)
-                self.print_info(f"创建用户ID: {user_id}")
-
-        # 创建测试文章
-        if self.created_user_ids:
+        # 创建测试用户并登录获取JWT
+        user_id = self.setup_authenticated_user("commenter", "password123")
+        if user_id:
+            self.created_user_ids.append(user_id)
+            
+            # 创建测试文章（现在已经有JWT认证）
             print("\\n  📄 创建可评论的文章")
             post_data = {
                 "title": "可评论的文章",
                 "content": "这是一篇可以被评论的文章内容，欢迎大家积极评论和讨论。",
-                "user_id": self.created_user_ids[0],
+                "user_id": user_id,
             }
 
             post_response = self.make_request(

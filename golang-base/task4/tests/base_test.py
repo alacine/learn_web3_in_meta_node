@@ -21,6 +21,7 @@ class BaseAPITest:
         self.session.headers.update(
             {"Content-Type": "application/json", "Accept": "application/json"}
         )
+        self.jwt_token = None  # 存储JWT token
 
     def print_test_header(self, title: str):
         """打印测试标题"""
@@ -48,6 +49,47 @@ class BaseAPITest:
         """打印信息消息"""
         print(f"{Fore.BLUE}ℹ️  {message}{Style.RESET_ALL}")
 
+    def set_jwt_token(self, token: str):
+        """设置JWT token用于认证"""
+        self.jwt_token = token
+        self.session.headers.update({"Authorization": f"Bearer {token}"})
+
+    def clear_jwt_token(self):
+        """清除JWT token"""
+        self.jwt_token = None
+        if "Authorization" in self.session.headers:
+            del self.session.headers["Authorization"]
+
+    def login_and_get_token(self, user_id: int, password: str) -> Optional[str]:
+        """登录并获取JWT token"""
+        login_data = {"id": user_id, "password": password}
+        
+        # 临时清除token进行登录
+        temp_token = self.jwt_token
+        self.clear_jwt_token()
+        
+        try:
+            response = self.session.post(f"{self.base_url}/login", json=login_data)
+            if response.status_code == 200:
+                data = response.json()
+                token = data.get("data", {}).get("token")
+                if token:
+                    self.set_jwt_token(token)
+                    self.print_success(f"登录成功，获取到JWT token")
+                    return token
+                else:
+                    self.print_error("登录响应中未找到token")
+            else:
+                self.print_error(f"登录失败，状态码: {response.status_code}")
+        except Exception as e:
+            self.print_error(f"登录过程中发生异常: {str(e)}")
+        finally:
+            # 如果登录失败，恢复之前的token
+            if not self.jwt_token and temp_token:
+                self.set_jwt_token(temp_token)
+        
+        return None
+
     def make_request(
         self,
         method: str,
@@ -55,6 +97,7 @@ class BaseAPITest:
         data: Optional[Dict[Any, Any]] = None,
         expected_status: int = 200,
         description: str = "",
+        require_auth: bool = True,
     ) -> requests.Response:
         """
         发送HTTP请求并处理响应
@@ -65,11 +108,16 @@ class BaseAPITest:
             data: 请求数据
             expected_status: 期望的状态码
             description: 请求描述
+            require_auth: 是否需要认证（对于register和login设为False）
 
         Returns:
             requests.Response对象
         """
         url = f"{self.base_url}{endpoint}"
+
+        # 检查是否需要认证但没有token
+        if require_auth and not self.jwt_token:
+            self.print_warning(f"需要认证的请求但未设置JWT token: {method.upper()} {endpoint}")
 
         try:
             if method.upper() == "GET":
@@ -125,7 +173,11 @@ class BaseAPITest:
     def check_server_status(self) -> bool:
         """检查服务器是否运行"""
         try:
-            response = self.session.get(f"{self.base_url}/user/1", timeout=5)
+            # 使用register endpoint检查服务器状态，因为它不需要认证
+            response = self.session.post(f"{self.base_url}/register", 
+                                       json={"username": "test_connection"}, 
+                                       timeout=5)
+            # 任何响应都表明服务器在运行，即使是错误响应
             return True
         except requests.exceptions.RequestException:
             return False
